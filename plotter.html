@@ -1,0 +1,469 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN"
+"http://www.w3.org/TR/html4/strict.dtd">
+<html lang="en">
+<head>
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+  <title>VR Plotter</title>
+  <!--<link rel="stylesheet" type="text/css" href="style.css">-->
+  <script id="vertexsphere" type="x-shader">
+  precision mediump float;
+  attribute vec3 aVert;
+  attribute vec3 aNormal;
+  uniform mat4 uMMatrix;
+  uniform mat4 uVMatrix;
+  uniform mat4 uPMatrix;
+  uniform vec3 uPos;
+  uniform float uRadius;
+  uniform vec3 uColor;
+  varying vec4 vCol;
+  varying vec4 aNormalInterp;
+  varying vec3 vertPos;
+  varying vec3 lightPos;
+  void main() {
+    // apply transformations
+    mat4 scale =  mat4(
+      vec4(uRadius,  0.0,0.0, 0.0),
+      vec4(0.0, uRadius,0.0, 0.0),
+      vec4(0.0,  0.0, uRadius, 0.0),
+      vec4(0.0,         0.0,         0.0, 1.0)
+    );
+    gl_Position = uPMatrix * uVMatrix*uMMatrix * (scale*vec4(aVert, 1.0)+vec4(uPos,0.0));
+    vertPos = (uVMatrix*uMMatrix * (scale*vec4(aVert, 1.0)+vec4(uPos,0.0))).xyz;
+
+    // set color
+    aNormalInterp = uVMatrix*uMMatrix * vec4(aNormal,0.0);
+    vCol = vec4(uColor.x, uColor.y, uColor.z, 1.0);
+
+    lightPos = ( uVMatrix*uMMatrix *vec4(2.0,1.0,-2.0,0.0)).xyz;
+  }
+  </script>
+
+  <script id="fragmentsphere" type="x-shader">
+  precision mediump float;
+  varying vec4 vCol;
+  varying vec4 aNormalInterp;
+  varying vec3 vertPos;
+  varying vec3 lightPos;
+  //out vec4 fragColor;
+
+  const float shininess = 32.0;
+  const float screenGamma =2.2;
+
+  void main() {
+    vec3 ambientColor = vCol.xyz/4.0;
+    vec3 diffuseColor = vCol.xyz;
+    vec3 specColor = vec3(1.0,1.0,1.0);
+    vec3 normal = normalize(aNormalInterp.xyz);
+    vec3 lightDir = normalize(lightPos );
+
+    float lambertian = max(dot(lightDir,normal), 0.0);
+    float specular = 0.0;
+
+    if(lambertian > 0.0) {
+
+      vec3 viewDir = normalize(-vertPos);
+      // this is blinn phong
+      vec3 halfDir = normalize(lightDir + viewDir);
+      float specAngle = max(dot(halfDir, normal), 0.0);
+      specular = pow(specAngle, shininess);
+      vec3 reflectDir = reflect(-lightDir, normal);
+      specAngle = max(dot(reflectDir, viewDir), 0.0);
+      // note that the exponent is different here
+      specular = pow(specAngle, shininess/4.0);
+    }
+    vec3 colorLinear = ambientColor +
+    lambertian * diffuseColor +
+    specular * specColor;
+    // apply gamma correction (assume ambientColor, diffuseColor and specColor
+    // have been linearized, i.e. have no gamma correction in them)
+    vec3 colorGammaCorrected = pow(colorLinear, vec3(1.0/screenGamma));
+    // use the gamma corrected color in the fragment
+    gl_FragColor = vec4(colorGammaCorrected, 1.0);
+    // use vertex color
+    //fragColor = vCol;
+  }
+  </script>
+
+
+  <script id="hvertex" type="x-shader">
+  precision mediump float;
+  attribute vec3 pos;
+  attribute vec3 color;
+  attribute float size;
+  uniform mat4 uMMatrix;
+  uniform mat4 uVMatrix;
+  uniform mat4 uPMatrix;
+  uniform float uTreshold;
+  varying vec4 vCol;
+  varying float vSize;
+  varying float vTreshold;
+  void main() {
+    // apply transformations
+    vCol = vec4(color, 1.0);
+    gl_PointSize = abs(size)*8.0;
+    vSize = size;
+    vTreshold = uTreshold;
+    gl_Position = uPMatrix * uVMatrix*uMMatrix * vec4(pos,1.0);
+  }
+  </script>
+
+  <script id="hfragment" type="x-shader">
+  precision mediump float;
+  varying vec4 vCol;
+  varying float vSize;
+  varying float vTreshold;
+  //out vec4 fragColor;
+
+  void main() {
+    if(vSize<vTreshold) discard;
+    gl_FragColor = vCol;
+    // use vertex color
+    //fragColor = vCol;
+  }
+  </script>
+
+  <script id="h2vertex" type="x-shader">
+  precision mediump float;
+  attribute vec3 pos;
+  attribute vec3 color;
+  attribute float size;
+  attribute vec3 normal;
+  uniform mat4 uMMatrix;
+  uniform mat4 uVMatrix;
+  uniform mat4 uPMatrix;
+  uniform mat4 uNMatrix;
+  uniform float uTreshold;
+  uniform vec3 uCameraPos;
+  uniform vec3 uLightPos;
+  varying vec4 vCol;
+  varying float vSize;
+  varying float vTreshold;
+  varying vec3 vNormal;
+  varying vec3 vPos;
+  varying vec3 vLight;
+  varying vec3 vCamera;
+  void main() {
+    // apply transformations
+    vCol = vec4(color, 1.0);
+    //gl_PointSize = abs(size)*8.0;
+    vSize = size;
+    vTreshold = uTreshold;
+    //mat3 nMatrix =transpose(inverse(mat3(uVMatrix*uMMatrix)));
+    vNormal = normalize((uNMatrix*vec4(normal,1.0)).xyz);
+    vPos = (uVMatrix*uMMatrix*vec4(pos,1.0)).xyz;
+    vLight = normalize(uLightPos - vPos);
+    vCamera = normalize(uCameraPos - vPos);
+    gl_Position = uPMatrix * uVMatrix*uMMatrix * vec4(pos,1.0);
+  }
+  </script>
+
+  <script id="h2fragment" type="x-shader">
+  precision mediump float;
+  // uniform vec3 uLightPos;
+  varying vec4 vCol;
+  varying float vSize;
+  varying float vTreshold;
+  varying vec3 vNormal;
+  varying vec3 vPos;
+  varying vec3 vLight;
+  varying vec3 vCamera;
+
+  const float shininess = 16.0;
+  const float screenGamma = 2.2; // Assume the monitor is calibrated to the sRGB color space
+  void main() {
+    //if(vSize<vTreshold) discard;
+    vec3 ambientColor = vCol.rgb/4.0;
+    vec3 diffuseColor = vCol.rgb;
+    vec3 specColor = vec3(1.0+vCol.rgb);
+
+    vec3 light = normalize(vLight);
+    vec3 eye = normalize(-vPos);
+    vec3 normal = normalize(vNormal);
+
+    float diffuse = max(dot(normal,light),0.0);
+
+    vec3 colorLinear = diffuse*diffuseColor+ambientColor;
+
+    vec3 colorGammaCorrected = pow(colorLinear, vec3(1.0/screenGamma));
+    // use the gamma corrected color in the fragment
+    gl_FragColor = vec4(colorGammaCorrected, 1.0);
+
+    //gl_FragColor = vCol;
+
+  }
+  </script>
+
+
+  <script id="vertex" type="x-shader">
+  attribute vec3 inputPosition;
+  attribute vec3 inputNormal;
+  attribute vec2 textureCoords;
+  attribute vec3 textureCoords3d;
+
+  uniform mat4 projection, model, view, camera;
+
+  varying vec3 normalInterp;
+  varying vec3 vertPos;
+  varying vec2 texCoords;
+  varying vec3 texCoords3d;
+
+  void main(){
+    gl_Position = projection * camera * view * model * vec4(inputPosition, 1.0);
+    gl_PointSize =10.0;
+    vec4 vertPos4 =  view * model * vec4(inputPosition, 1.0);
+    vertPos = vec3(vertPos4) / vertPos4.w;
+    normalInterp = vec3(view * model * vec4(inputNormal, 0.0));
+    texCoords = textureCoords;
+    texCoords3d =textureCoords3d;
+
+  }
+  </script>
+  <script id="fragment" type="x-shader">
+  precision mediump float;
+
+  varying vec3 normalInterp;
+  varying vec3 vertPos;
+  varying vec2 texCoords;
+  varying vec3 texCoords3d;
+
+  uniform vec4 uColor;
+  uniform vec4 uColor2;
+  uniform vec4 uColor3;
+  uniform float uDice;
+  uniform float uTextureOffset;
+  uniform sampler2D uSampler;
+  uniform vec3 uLightPos;
+  const vec3 lightPos = vec3(0.0,0.0,0.0);
+  const float shininess = 16.0;
+  const float screenGamma = 2.2; // Assume the monitor is calibrated to the sRGB color space
+  vec3 mod289(vec3 x) {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+  }
+
+  vec4 mod289(vec4 x) {
+    return x - floor(x * (1.0 / 289.0)) * 289.0;
+  }
+
+  vec4 permute(vec4 x) {
+    return mod289(((x*34.0)+1.0)*x);
+  }
+
+  vec4 taylorInvSqrt(vec4 r)
+  {
+    return 1.79284291400159 - 0.85373472095314 * r;
+  }
+
+  float snoise(vec3 v)
+  {
+    const vec2  C = vec2(1.0/6.0, 1.0/3.0) ;
+    const vec4  D = vec4(0.0, 0.5, 1.0, 2.0);
+
+    // First corner
+    vec3 i  = floor(v + dot(v, C.yyy) );
+    vec3 x0 =   v - i + dot(i, C.xxx) ;
+
+    // Other corners
+    vec3 g = step(x0.yzx, x0.xyz);
+    vec3 l = 1.0 - g;
+    vec3 i1 = min( g.xyz, l.zxy );
+    vec3 i2 = max( g.xyz, l.zxy );
+
+    //   x0 = x0 - 0.0 + 0.0 * C.xxx;
+    //   x1 = x0 - i1  + 1.0 * C.xxx;
+    //   x2 = x0 - i2  + 2.0 * C.xxx;
+    //   x3 = x0 - 1.0 + 3.0 * C.xxx;
+    vec3 x1 = x0 - i1 + C.xxx;
+    vec3 x2 = x0 - i2 + C.yyy; // 2.0*C.x = 1/3 = C.y
+    vec3 x3 = x0 - D.yyy;      // -1.0+3.0*C.x = -0.5 = -D.y
+
+    // Permutations
+    i = mod289(i);
+    vec4 p = permute( permute( permute(
+      i.z + vec4(0.0, i1.z, i2.z, 1.0 ))
+      + i.y + vec4(0.0, i1.y, i2.y, 1.0 ))
+      + i.x + vec4(0.0, i1.x, i2.x, 1.0 ));
+
+      // Gradients: 7x7 points over a square, mapped onto an octahedron.
+      // The ring size 17*17 = 289 is close to a multiple of 49 (49*6 = 294)
+      float n_ = 0.142857142857; // 1.0/7.0
+      vec3  ns = n_ * D.wyz - D.xzx;
+
+      vec4 j = p - 49.0 * floor(p * ns.z * ns.z);  //  mod(p,7*7)
+
+      vec4 x_ = floor(j * ns.z);
+      vec4 y_ = floor(j - 7.0 * x_ );    // mod(j,N)
+
+      vec4 x = x_ *ns.x + ns.yyyy;
+      vec4 y = y_ *ns.x + ns.yyyy;
+      vec4 h = 1.0 - abs(x) - abs(y);
+
+      vec4 b0 = vec4( x.xy, y.xy );
+      vec4 b1 = vec4( x.zw, y.zw );
+
+      //vec4 s0 = vec4(lessThan(b0,0.0))*2.0 - 1.0;
+      //vec4 s1 = vec4(lessThan(b1,0.0))*2.0 - 1.0;
+      vec4 s0 = floor(b0)*2.0 + 1.0;
+      vec4 s1 = floor(b1)*2.0 + 1.0;
+      vec4 sh = -step(h, vec4(0.0));
+
+      vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy ;
+      vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww ;
+
+      vec3 p0 = vec3(a0.xy,h.x);
+      vec3 p1 = vec3(a0.zw,h.y);
+      vec3 p2 = vec3(a1.xy,h.z);
+      vec3 p3 = vec3(a1.zw,h.w);
+
+      //Normalise gradients
+      vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2, p2), dot(p3,p3)));
+      p0 *= norm.x;
+      p1 *= norm.y;
+      p2 *= norm.z;
+      p3 *= norm.w;
+
+      // Mix final noise value
+      vec4 m = max(0.6 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0);
+      m = m * m;
+      return 42.0 * dot( m*m, vec4( dot(p0,x0), dot(p1,x1),
+      dot(p2,x2), dot(p3,x3) ) );
+    }
+
+    float turbulence(vec3 pos,float size)
+    {
+      float value = 0.0, initialSize = size;
+      float size2 = size;
+      for(float s =0.0; s<5.0; s+=1.0)
+      {
+        value += snoise(pos/size2) * size2;
+        size2/=2.0;
+      }
+      return value / initialSize;
+    }
+
+    float wood(vec3 pos)
+    {
+      float xyPeriod = 12.0; //number of rings
+      float turbPower = 0.02; //makes twists
+      float turbSize = 32.0; //initial size of the turbulence
+      float noiseWidth = 256.0;
+      float noiseHeight = 256.0;
+
+      float xValue = pos.x/noiseWidth;
+      float yValue = pos.y/noiseHeight;
+      float distValue = sqrt(xValue * xValue + yValue * yValue) + turbPower * turbulence(vec3(pos.x,pos.y,pos.z*0.1), turbSize) ;
+      float sineValue = 0.5*abs(sin(2.0 * xyPeriod * distValue * 3.14159));
+      return sineValue;
+    }
+
+    float marble(vec3 pos)
+    {
+      float noiseWidth = 256.0;
+      float noiseHeight = 256.0;
+      float xPeriod = 5.0; //defines repetition of marble lines in x direction
+      float yPeriod = 10.0; //defines repetition of marble lines in y direction
+      //turbPower = 0 ==> it becomes a normal sine pattern
+      float turbPower = 5.0; //makes twists
+      float turbSize = 32.0; //initial size of the turbulence
+      float xyValue = pos.x * xPeriod / noiseWidth + pos.y * yPeriod / noiseHeight + turbPower * turbulence(pos,turbSize);
+      float sineValue = abs(sin(xyValue * 3.14159));
+      return sineValue;
+    }
+
+    void main() {
+      vec4 c1 =texture2D(uSampler, vec2(texCoords.s,texCoords.t));
+      float luma = 0.0;
+      if(uDice<0.5)
+      {
+        luma = marble((texCoords3d+vec3(0,0,uTextureOffset))*100.0);
+      }
+      else {
+        luma = wood((texCoords3d+vec3(0,0,uTextureOffset))*1200.0);
+      }
+      float lumambient = luma/2.0;
+      vec4 c = vec4(mix(uColor.xyz,uColor3.xyz,luma),1.0);
+
+      if( c1.a>0.2)
+      {
+        c = vec4(mix(c.xyz,uColor2.xyz,c1.a),c1.a);
+      }
+      //c.a = c1.a;
+
+
+
+
+      vec3 ambientColor = c.xyz/4.0;
+      vec3 diffuseColor = c.xyz;
+
+      vec3 specColor = vec3(0.8,0.8,0.8);
+      vec3 normal = normalize(normalInterp);
+      vec3 lightDir = normalize(uLightPos - vertPos);
+
+      float lambertian = max(dot(lightDir,normal), 0.0);
+      float specular = 0.0;
+
+      if(lambertian > 0.0) {
+
+        vec3 viewDir = normalize(-vertPos);
+        // this is blinn phong
+        vec3 halfDir = normalize(lightDir + viewDir);
+        float specAngle = max(dot(halfDir, normal), 0.0);
+        specular = pow(specAngle, shininess);
+        vec3 reflectDir = reflect(-lightDir, normal);
+        specAngle = max(dot(reflectDir, viewDir), 0.0);
+        // note that the exponent is different here
+        specular = pow(specAngle, shininess);
+      }
+      vec3 colorLinear = ambientColor +
+      lambertian * diffuseColor +
+      specular * specColor;
+      // apply gamma correction (assume ambientColor, diffuseColor and specColor
+      // have been linearized, i.e. have no gamma correction in them)
+      vec3 colorGammaCorrected = pow(colorLinear, vec3(1.0/screenGamma));
+      // use the gamma corrected color in the fragment
+      gl_FragColor = vec4(colorGammaCorrected, 1.0);
+
+    }
+    </script>
+
+
+  </head>
+  <body onload="PlotterLib.startdice(); " onresize="PlotterLib.resize();" id="bod" style="height: 100%; overflow:hidden;">
+    <layer id="canvaslayer" style=" z-index:-1; top:0; left:0; position:absolute;">
+      <canvas tabIndex="0" id="glcanvas" width="600" height="600">
+        Your browser doesn't appear to support the
+        <code>&lt;canvas&gt;</code> element.
+      </canvas>
+    </layer>
+    <layer id="textlayer" style=" z-index:0; top:0; left:0; position:absolute;">
+
+      <button style="width:75px;height:75px" onclick="PlotterLib.toggleWalls()">ToggleWalls</button>
+      <button style="width:75px;height:75px" onclick="PlotterLib.toggleFlatShading()">Shading</button>
+      <button style="width:75px;height:75px" onclick="PlotterLib.togglePoints()">Points</button>
+      <button style="width:75px;height:75px" onclick="PlotterLib.toggleMesh()">Mesh</button>
+      <button style="width:75px;height:75px" onclick="PlotterLib.fullScreen()">Fullscreen</button>
+      <button style="width:75px;height:75px" onclick="PlotterLib.screenshot()">Screenshot</button>
+      <button style="width:150px;height:75px" id="stop-start">Start VR display</button>
+      <label>
+        <input type="file" id="inputfiledialog"/>
+      </label>
+      <br>
+      <button id="recordButton">record</button>
+      <button id="playButton">play</button>
+      <button id="downloadButton">download</button>
+      <input type="text" name="filename" id="filename" value="test.webm">
+      <br>
+      <input type="range" id="tresholdslider" min="0" max="1" step = "0.001"/>
+      <input type="color" id="colorinput" />
+      <input type="range" id="alphaslider" min="0" max="255" step="1"/>
+
+    </layer>
+    <script type="text/javascript" src="vema/vema.js"></script>
+    <script type="text/javascript" src="shader.js"></script>
+    <script type="text/javascript" src="sphere.js"></script>
+    <script type="text/javascript" src="walls.js"></script>
+
+    <script type="text/javascript" src="vr.js"></script>
+    <script type="text/javascript" src="plotter.js"></script>
+  </body>
+
+  </html>
