@@ -72,6 +72,12 @@
     let meshOn = true;
     let clearColor = [0, 0, 0, 1];
 
+    let legend;
+    let legendtex;
+    let legendprogram;
+    let legendvertexbuffer;
+    let legendtexcoordsbuffer;
+
     const frequencyArray = [];
 
     const Vec3 = VemaLib.Vec3; // eslint-disable-line no-undef
@@ -307,6 +313,8 @@
           }
         }
       }
+
+      if(legendtex !== undefined) drawLegend(gl);
       checkGlError();
     }
 
@@ -1011,6 +1019,7 @@
           pointcount = dataLength;
           histogramvisible = true;
           console.log('READY OR NOT');
+          updateLegend(maxv);
         } else if (dataType === 1) {
           const testfreq = splitStringBuffer[datastart].split('\t')[1];
           let k = 0;
@@ -1202,6 +1211,7 @@
           histogramvisible = true;
           cf = frequencyArray[0];
           console.log('READY OR NOT2');
+          updateLegend(maxv2[0],minv2[0]);
         }
       };
       reader.onerror = function () {
@@ -1422,6 +1432,101 @@
       clearColor = [rgb.r / 255, rgb.g / 255, rgb.b / 255, alpha / 255];
     };
 
+    function updateLegend(maxv) {
+      let ctx = legend.getContext('2d');
+      let h = legend.height;
+      let w = legend.width;
+      for(let i=0; i<w; i++){
+        const color = getPseudoColor(i/w);
+        ctx.strokeStyle = 'rgb('+Math.ceil(color.red*255)+','+Math.ceil(color.green*255)+','+Math.ceil(color.blue*255),+')';
+        ctx.beginPath();
+        ctx.moveTo(i,0);
+        ctx.lineTo(i,h);
+        ctx.stroke();
+      }
+      //ctx.font = "30px Comic Sans MS";
+      ctx.font = "8px"
+      ctx.fillStyle = 'white';
+      ctx.textAlign = "center";
+      ctx.rotate(-Math.PI/2);
+      ctx.fillText(""+maxv.toFixed(2),-h/2,w);
+
+      legendtex = makeTexture(legend);
+    }
+
+    function initLegend(gl){
+      let legendvertex=`
+precision highp float;
+attribute vec2 pos;
+attribute vec2 texCoord;
+varying vec2 v_TexCoordinate;
+void main() {
+    v_TexCoordinate = vec2(texCoord.x,1.0-texCoord.y);
+    gl_Position = vec4(pos,0.0,1.0);
+}
+`;
+      let legendfragment=`
+precision highp float;
+uniform sampler2D uTexture0;
+varying vec2 v_TexCoordinate;
+void main () {
+    gl_FragColor =  texture2D(uTexture0, v_TexCoordinate);
+}
+`;
+
+      legendprogram = ShaderLib.makeProgram2(gl, legendvertex, legendfragment);
+      gl.useProgram(legendprogram);
+      legendprogram.vertexCoords = gl.getAttribLocation(legendprogram, 'pos');
+      legendprogram.texCoords = gl.getAttribLocation(legendprogram, 'texCoord');
+      legendprogram.uTexture0 =  gl.getUniformLocation(legendprogram, 'uTexture0');
+      legendvertexbuffer =gl.createBuffer();
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, legendvertexbuffer);
+      const ratio= 16/9;
+      const height = 1/10;
+      const width = height*300/80*ratio;
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1-width, 1-height, 1, 1-height, 1-width, 1, 1, 1
+      ]), gl.STATIC_DRAW);
+
+      legendtexcoordsbuffer =gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, legendtexcoordsbuffer);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1
+      ]), gl.STATIC_DRAW);
+
+    }
+
+    function drawLegend(gl){
+
+      if(legendtex === undefined) return;
+      gl.useProgram(legendprogram);
+
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, legendtex);
+      gl.uniform1i(legendprogram.uTexture0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, legendvertexbuffer);
+      gl.enableVertexAttribArray(legendprogram.vertexCoords);
+      gl.vertexAttribPointer(legendprogram.vertexCoords, 2, gl.FLOAT, false, 0, 0);
+
+      gl.bindBuffer(gl.ARRAY_BUFFER, legendtexcoordsbuffer);
+      gl.enableVertexAttribArray(legendprogram.texCoords);
+      gl.vertexAttribPointer(legendprogram.texCoords, 2, gl.FLOAT, false, 0, 0);
+
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    }
+
+    function makeTexture(textCanvas){
+      var textWidth  = textCanvas.width;
+      var textHeight = textCanvas.height;
+      var textTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, textTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textCanvas);
+      // make sure we can render it even if it's not a power of 2
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      return textTex;
+    }
 
     PlotterLib.startdice = function startdice() {
       gravity = new Vec3(0, -9.81, 0);
@@ -1435,6 +1540,8 @@
       }
 
       canvas = document.getElementById('glcanvas'); // eslint-disable-line no-undef
+      legend = document.getElementById('legend');
+
       const tresholdslider = document.getElementById('tresholdslider'); // eslint-disable-line no-undef
       const colorinput = document.getElementById('colorinput'); // eslint-disable-line no-undef
       const alphaslider = document.getElementById('alphaslider'); // eslint-disable-line no-undef
@@ -1574,6 +1681,8 @@
       // planeConstraints = WallLib.makeWalls(); // eslint-disable-line no-undef
       // Initialize the GL context
       gl = initWebGL(canvas);
+
+      initLegend(gl);
 
       // stream = canvas.captureStream(); // frames per second
 
