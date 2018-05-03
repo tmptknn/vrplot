@@ -70,6 +70,8 @@
     let flatShadingOn = false;
     let pointsOn = false;
     let meshOn = true;
+    let axisOn = true;
+    let legendOn = true;
     let clearColor = [0, 0, 0, 1];
 
     let legend;
@@ -186,6 +188,14 @@
 
     PlotterLib.toggleMesh = function toggleMesh() {
       meshOn = !meshOn;
+    };
+
+    PlotterLib.toggleAxis = function toggleAxis() {
+      axisOn = !axisOn;
+    };
+
+    PlotterLib.toggleLegend = function toggleLegend() {
+      legendOn = !legendOn;
     };
 
     function drawGeometry(mod,vie,cam,pro) {
@@ -313,8 +323,8 @@
           }
         }
       }
-      axis.draw(gl, mod,vie,cam,pro);
-      if(legendtex !== undefined) drawLegend(gl);
+      if(axisOn) axis.draw(gl, mod,vie,cam,pro);
+      if(legendtex !== undefined && legendOn) drawLegend(gl);
       checkGlError();
     }
 
@@ -579,6 +589,7 @@
       // WallLib.makeWalls(); // eslint-disable-line no-undef
       WallLib.makeWallBuffers(gl); // eslint-disable-line no-undef
       makeCamera();
+      updateLegendCoords(gl);
       // PlotterLib.reroll();
     };
 
@@ -1450,20 +1461,37 @@
       for(let i=0; i<w; i++){
         const color = getPseudoColor(i/w);
         const cname =  'rgba('+Math.ceil(color.red*255)+','+Math.ceil(color.green*255)+','+Math.ceil(color.blue*255)+',1.0)';
-        console.log("Color name "+cname);
+        //console.log("Color name "+cname);
         ctx.strokeStyle =cname;
         ctx.beginPath();
         ctx.moveTo(i,0);
-        ctx.lineTo(i,h);
+        ctx.lineTo(i,h/2);
         ctx.stroke();
       }
+      ctx.font = "25px Arial";
+      ctx.fillStyle = "rgba(255,0,0,1.0)";
+      ctx.textAlign = "left";
+      ctx.fillText("+ x-axis",0,h*4/6);
+      ctx.fillStyle = "rgba(0,255,255,1.0)";
+      ctx.fillText("- x-axis",w/2,h*4/6);
+
+      ctx.fillStyle = "rgba(0,255,0,1.0)";
+      ctx.fillText("+ y-axis",0,h*5/6);
+      ctx.fillStyle = "rgba(255,0,255,1.0)";
+      ctx.fillText("- y-axis",w/2,h*5/6);
+
+      ctx.fillStyle = "rgba(0,0,255,1.0)";
+      ctx.fillText("+ z-axis",0,h);
+      ctx.fillStyle = "rgba(255,255,0,1.0)";
+      ctx.fillText("- z-axis",w/2,h);
+
       //ctx.font = "30px Comic Sans MS";
-      ctx.font = "8px"
+      ctx.font = "10px Arial"
       ctx.fillStyle = 'white';
       ctx.textAlign = "center";
       ctx.rotate(-Math.PI/2);
-      ctx.fillText(""+maxv.toFixed(2),-h/2,w);
-      ctx.fillText(""+minv.toFixed(2),-h/2,0+8);
+      ctx.fillText(""+maxv.toFixed(2),-h/4,w);
+      ctx.fillText(""+minv.toFixed(2),-h/4,0+8);
 
       legendtex = makeTexture(legend);
     }
@@ -1495,18 +1523,29 @@ void main () {
       legendprogram.uTexture0 =  gl.getUniformLocation(legendprogram, 'uTexture0');
       legendvertexbuffer =gl.createBuffer();
 
+      updateLegendCoords(gl);
+/*
       gl.bindBuffer(gl.ARRAY_BUFFER, legendvertexbuffer);
-      const ratio= 16/9;
-      const height = 1/10;
-      const width = height*300/80*ratio;
+      const ratio= canvas.width/canvas.height;
+      const height = 2*legend.height/canvas.height;
+      const width = height*legend.width/legend.height/ratio;
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1-width, 1-height, 1, 1-height, 1-width, 1, 1, 1
       ]), gl.STATIC_DRAW);
-
+*/
       legendtexcoordsbuffer =gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, legendtexcoordsbuffer);
       gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, 0, 1, 0, 0, 1, 1, 1
       ]), gl.STATIC_DRAW);
 
+    }
+
+    function updateLegendCoords(gl){
+      gl.bindBuffer(gl.ARRAY_BUFFER, legendvertexbuffer);
+      const ratio= canvas.width/canvas.height;
+      const height = 2*legend.height/canvas.height;
+      const width = height*legend.width/legend.height/ratio;
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([1-width, 1-height, 1, 1-height, 1-width, 1, 1, 1
+      ]), gl.STATIC_DRAW);
     }
 
     function drawLegend(gl){
@@ -1580,7 +1619,7 @@ void main () {
       };
 
       alphaslider.onchange = colorinput.onchange = function colorInputChange() {
-        console.log(`new color ${colorinput.value} ${alphaslider.value}`);
+        //console.log(`new color ${colorinput.value} ${alphaslider.value}`);
         PlotterLib.changeColor(colorinput.value, alphaslider.value);
       };
 
@@ -1593,7 +1632,10 @@ void main () {
         canvas.addEventListener('DOMMouseScroll', PlotterLib.mouseWheel, false);
       }
       canvas.onkeypress = function onkeypress(e) {
-        if (e.key === 'n') {
+        if(e.key === 'Escape'){
+          console.log("hide ui????");
+          document.getElementById('textlayer').visible = !document.getElementById('textlayer').visible;
+        } else if (e.key === 'n') {
           mInteractionState = InteractionState.Normal;
         } else if (e.key === 'h') {
           mInteractionState = InteractionState.HorizontalTranslate;
@@ -1613,7 +1655,11 @@ void main () {
       };
 
       canvas.onkeyup = function onkeyup(e) {
-        console.log(`keyup ${e}`);
+        console.log(`keyup ${e.key}`);
+        if(e.key === 'Escape' || e.key === 'p'){
+          console.log("hide ui????");
+          document.getElementById('textlayer').hidden = !document.getElementById('textlayer').hidden;
+        }
       };
 
 

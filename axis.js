@@ -39,21 +39,26 @@
         let vertex=`
   precision highp float;
   attribute vec3 pos;
+  attribute vec4 aColor;
   uniform mat4 projection,model, view, camera;
+  varying vec4 vColor;
   void main() {
+      vColor= aColor;
       gl_Position = projection*view*camera*model*vec4(pos,1.0);
   }
   `;
         let fragment=`
   precision highp float;
+  varying vec4 vColor;
   void main () {
-      gl_FragColor =  vec4(1.0,1.0,1.0,1.0);
+      gl_FragColor =  vColor;
   }
   `;
 
         this.program = ShaderLib.makeProgram2(gl, vertex, fragment);
         gl.useProgram(this.program);
         this.program.vertexCoords = gl.getAttribLocation(this.program, 'pos');
+        this.program.aColor = gl.getAttribLocation(this.program, 'aColor');
         this.program.uCamera = gl.getUniformLocation(this.program, 'camera');
         this.program.uModel = gl.getUniformLocation(this.program, 'model');
         this.program.uView = gl.getUniformLocation(this.program, 'view');
@@ -77,11 +82,31 @@
 
         gl.enableVertexAttribArray(this.program.vertexCoords);
         gl.vertexAttribPointer(this.program.vertexCoords, 3, gl.FLOAT, false, 0, 0);
+
+        this.colorbuffer =gl.createBuffer();
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.colorbuffer);
+        gl.bufferData(gl.ARRAY_BUFFER,
+          new Float32Array([1,0,0,1,
+            1,0,0,1,
+            0,1,1,1,
+            0,1,1,1,
+            0,1,0,1,
+            0,1,0,1,
+            1,0,1,1,
+            1,0,1,1,
+            0,0,1,1,
+            0,0,1,1,
+            1,1,0,1,
+            1,1,0,1]),
+          gl.STATIC_DRAW);
+
+        gl.enableVertexAttribArray(this.program.aColor);
+        gl.vertexAttribPointer(this.program.aColor, 4, gl.FLOAT, false, 0, 0);
         this.initLabels(gl);
 
       }
 
-      initLabels(gl,){
+      initLabels(gl){
         this.labelx = makeLabel("X",gl);
 
 
@@ -132,6 +157,9 @@
         gl.bindBuffer(gl.ARRAY_BUFFER, this.vertexbuffer);
         gl.enableVertexAttribArray(this.program.vertexCoords);
         gl.vertexAttribPointer(this.program.vertexCoords, 3, gl.FLOAT, false, 0, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, this.colorbuffer);
+        gl.enableVertexAttribArray(this.program.aColor);
+        gl.vertexAttribPointer(this.program.aColor, 4, gl.FLOAT, false, 0, 0);
         gl.drawArrays(gl.LINES, 0, 12);
 
         this.drawLabel(gl,this.labelx,model,view,camera,projection);

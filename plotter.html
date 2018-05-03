@@ -436,13 +436,15 @@
     </layer>
     <layer id="textlayer" style=" z-index:0; top:0; left:0; position:absolute;">
 
-      <button style="width:75px;height:75px" onclick="PlotterLib.toggleWalls()">ToggleWalls</button>
-      <button style="width:75px;height:75px" onclick="PlotterLib.toggleFlatShading()">Shading</button>
-      <button style="width:75px;height:75px" onclick="PlotterLib.togglePoints()">Points</button>
-      <button style="width:75px;height:75px" onclick="PlotterLib.toggleMesh()">Mesh</button>
-      <button style="width:75px;height:75px" onclick="PlotterLib.fullScreen()">Fullscreen</button>
-      <button style="width:75px;height:75px" onclick="PlotterLib.screenshot()">Screenshot</button>
-      <button style="width:150px;height:75px" id="stop-start">Start VR display</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.toggleWalls()">ToggleWalls</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.toggleFlatShading()">Shading</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.togglePoints()">Points</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.toggleMesh()">Mesh</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.toggleAxis()">Axis</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.toggleLegend()">Legend</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.fullScreen()">Fullscreen</button>
+      <button style="width:75px;height:25px" onclick="PlotterLib.screenshot()">Screenshot</button>
+      <button style="width:120px;height:25px" id="stop-start">Start VR display</button>
       <label>
         <input type="file" id="inputfiledialog"/>
       </label>
@@ -456,7 +458,7 @@
       <input type="color" id="colorinput" />
       <input type="range" id="alphaslider" min="0" max="255" step="1"/>
       <br>
-      <canvas id="legend" width="300" height="50"/>
+      <canvas id="legend" width="300" height="100"/>
     </layer>
     <script type="text/javascript" src="vema/vema.js"></script>
     <script type="text/javascript" src="shader.js"></script>
