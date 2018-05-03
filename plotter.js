@@ -66,7 +66,7 @@
     let tresholdvalue = 0.5;
     let takeshotwhenready = false;
 
-    let wallsOn = true;
+    let wallsOn = false;
     let flatShadingOn = false;
     let pointsOn = false;
     let meshOn = true;
@@ -188,7 +188,7 @@
       meshOn = !meshOn;
     };
 
-    function drawGeometry() {
+    function drawGeometry(mod,vie,cam,pro) {
       gl.useProgram(program);
       gl.uniformMatrix4fv(program.uModel, false, new Float32Array(model.flatten()));
       gl.uniformMatrix4fv(program.uNormalMat, false, new Float32Array(normalMat.flatten()));
@@ -313,7 +313,7 @@
           }
         }
       }
-
+      axis.draw(gl, mod,vie,cam,pro);
       if(legendtex !== undefined) drawLegend(gl);
       checkGlError();
     }
@@ -381,7 +381,11 @@
 
 
       gl.useProgram(program);
-      drawGeometry();
+      drawGeometry(new Float32Array(modelTotal.flatten()),
+        new Float32Array(view.flatten()),
+        new Float32Array(cameraMatrix.flatten()),
+        new Float32Array(perspectiveMatrix.flatten())
+      	);
       if (takeshotwhenready) {
         PlotterLib.takeScreenshot();
         takeshotwhenready = false;
@@ -870,7 +874,8 @@
 
           const dataArray = [];
 
-          let maxv = 0;
+          let maxv = -1000;
+          let minv = 1000;
           for (let i = 0; i < dataLength; i++) {
             const line = splitStringBuffer[i + datastart];
             const splitLine = line.split('\t');
@@ -881,8 +886,11 @@
             const value = parseFloat(splitLine[2]);
           // valueArray[i] = value;
             dataArray.push({ azimuth, elevation, value });
-            if (maxv < Math.abs(value)) {
-              maxv = Math.abs(value);
+            if (maxv < value) {
+              maxv = value;
+            }
+            if (minv > value) {
+              minv = value;
             }
           }
 
@@ -931,7 +939,8 @@
             const value = dp.value;
             const azimuth = dp.azimuth;
             const angle = dp.elevation;
-            const fv = 1.0 - (Math.abs(value) / maxv);
+            //const fv = 1.0 - (Math.abs(value) / maxv);
+            const fv = ((value-minv) / (maxv-minv));
             datavaluebuffer[i] = fv;
 
             const colorX = getPseudoColor(fv);
@@ -1019,7 +1028,7 @@
           pointcount = dataLength;
           histogramvisible = true;
           console.log('READY OR NOT');
-          updateLegend(maxv);
+          updateLegend(maxv,minv);
         } else if (dataType === 1) {
           const testfreq = splitStringBuffer[datastart].split('\t')[1];
           let k = 0;
@@ -1432,13 +1441,17 @@
       clearColor = [rgb.r / 255, rgb.g / 255, rgb.b / 255, alpha / 255];
     };
 
-    function updateLegend(maxv) {
+    function updateLegend(maxv, minv) {
       let ctx = legend.getContext('2d');
       let h = legend.height;
       let w = legend.width;
+      ctx.fillStyle = "black"
+      ctx.fillRect(0,0,w,h);
       for(let i=0; i<w; i++){
         const color = getPseudoColor(i/w);
-        ctx.strokeStyle = 'rgb('+Math.ceil(color.red*255)+','+Math.ceil(color.green*255)+','+Math.ceil(color.blue*255),+')';
+        const cname =  'rgba('+Math.ceil(color.red*255)+','+Math.ceil(color.green*255)+','+Math.ceil(color.blue*255)+',1.0)';
+        console.log("Color name "+cname);
+        ctx.strokeStyle =cname;
         ctx.beginPath();
         ctx.moveTo(i,0);
         ctx.lineTo(i,h);
@@ -1450,6 +1463,7 @@
       ctx.textAlign = "center";
       ctx.rotate(-Math.PI/2);
       ctx.fillText(""+maxv.toFixed(2),-h/2,w);
+      ctx.fillText(""+minv.toFixed(2),-h/2,0+8);
 
       legendtex = makeTexture(legend);
     }
@@ -1683,6 +1697,7 @@ void main () {
       gl = initWebGL(canvas);
 
       initLegend(gl);
+      axis = new AxisLib.AxisRenderer(gl);
 
       // stream = canvas.captureStream(); // frames per second
 
