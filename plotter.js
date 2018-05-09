@@ -35,6 +35,8 @@
     let view;
     let normalMat;
 
+    let vrOffsetMatrix;
+
     let running = true;
     let sphereRenderer;
     let pointcount = 0;
@@ -93,6 +95,7 @@
     const modelScale = new Matrix4();
     const modelPreRotTrans = new Matrix4();
     const modelPostRotTrans = new Matrix4();
+    let extraRotation = new Matrix4();
     let mInteractionState = InteractionState.Normal;
 
     // const angle = 0.0;
@@ -105,6 +108,9 @@
     let translateStartX = 0;
     let translateStartY = 0;
     let translateStartZ = 0;
+    let moveStartX = 0;
+    let moveStartY = 0;
+    let moveStartZ = 0;
     let scaleStartX = 1.0;
     let modelScaleFactor = 1.0;
     let autoRotationY=0.0;
@@ -195,7 +201,7 @@
 
     function drawGeometry(mod,vie,cam,pro) {
       gl.useProgram(program);
-      gl.uniformMatrix4fv(program.uModel, false, new Float32Array(model.flatten()));
+      gl.uniformMatrix4fv(program.uModel, false, new Float32Array((vrOffsetMatrix).flatten()));
       gl.uniformMatrix4fv(program.uNormalMat, false, new Float32Array(normalMat.flatten()));
 
       gl.uniform4fv(program.uColor, [0.13, 0.13, 0.13, 1.0]); // table color
@@ -244,8 +250,8 @@
             gl.uniform3fv(h2program.uCameraPos, cameraPos.f);
             gl.uniform3fv(h2program.uLightPos, [0.2, 10.0, 20.0]);
             gl.bindBuffer(gl.ARRAY_BUFFER, dataSet.hsbuffer);
-            gl.enableVertexAttribArray(h2program.size);
-            gl.vertexAttribPointer(h2program.size, 1, gl.FLOAT, false, 0, 0);
+            // gl.enableVertexAttribArray(h2program.size);
+            // gl.vertexAttribPointer(h2program.size, 1, gl.FLOAT, false, 0, 0);
 
             gl.bindBuffer(gl.ARRAY_BUFFER, dataSet.hpbuffer);
             gl.enableVertexAttribArray(h2program.pos);
@@ -435,7 +441,7 @@
 
       // WebVR: Render the left eye’s view to the left half of the canvas
       gl.viewport(0, 0, canvas.width * 0.5, canvas.height);
-      perspectiveMatrix.makePerspective(90, 16.0 / 9.0, 0.001, -10000.0);
+    //  perspectiveMatrix.makePerspective(90, 16.0 / 9.0, 0.001, -100000.0);
       gl.useProgram(program);
 
       gl.uniformMatrix4fv(projectionMatrixLocation, false,
@@ -460,7 +466,9 @@
       gl.uniformMatrix4fv(hprogram.uVMatrix, false,
           VrLib.frameData.leftViewMatrix);  // eslint-disable-line no-undef
       // modelRot.rotationYMatrix(angle);
-      modelTotal = modelScale.multiple(modelRot.multiple(modelAutoRot.multiple(modelTrans)));
+      modelTrans.translate(modelPosition.f[0], modelPosition.f[1], modelPosition.f[2]);
+      modelScale.scale(modelScaleFactor, modelScaleFactor, modelScaleFactor);
+      modelTotal = modelScale.multiple(modelRot.multiple(extraRotation.multiple(modelAutoRot.multiple(modelTrans.multiple(vrOffsetMatrix)))));
       gl.uniformMatrix4fv(hprogram.uMMatrix, false, new Float32Array(modelTotal.flatten()));
 
       gl.useProgram(h2program);
@@ -469,9 +477,21 @@
       gl.uniformMatrix4fv(h2program.uVMatrix, false,
           VrLib.frameData.leftViewMatrix);  // eslint-disable-line no-undef
       // modelRot.rotationYMatrix(angle);
-      modelTotal = modelScale.multiple(modelRot.multiple(modelAutoRot.multiple(modelTrans)));
+
+      //modelTotal = modelScale.multiple(modelRot.multiple(modelAutoRot.multiple(modelTrans)));
+      const n0Matrix = cameraMatrix.multiple(modelTotal);
+      // console.log(n0Matrix);
+      const n1Matrix = n0Matrix.invert();
+      // console.log(n1Matrix);
+      const nMatrix = n1Matrix.transpose();
+      gl.uniformMatrix4fv(h2program.uNMatrix, false, new Float32Array(nMatrix.flatten()));
+
+
       gl.uniformMatrix4fv(h2program.uMMatrix, false, new Float32Array(modelTotal.flatten()));
-      drawGeometry();
+      drawGeometry(new Float32Array(modelTotal.flatten()),
+        VrLib.frameData.leftViewMatrix,
+        new Float32Array(im.flatten()),
+        VrLib.frameData.leftProjectionMatrix);
       // WebVR: Render the right eye’s view to the right half of the canvas
       gl.viewport(canvas.width * 0.5, 0, canvas.width * 0.5, canvas.height);
       gl.useProgram(program);
@@ -502,6 +522,8 @@
       gl.uniformMatrix4fv(hprogram.uVMatrix, false,
           VrLib.frameData.rightViewMatrix);  // eslint-disable-line no-undef
 
+
+
       gl.useProgram(h2program);
       gl.uniformMatrix4fv(h2program.uPMatrix, false,
               VrLib.frameData.rightProjectionMatrix); // eslint-disable-line no-undef
@@ -509,7 +531,12 @@
               VrLib.frameData.rightViewMatrix);  // eslint-disable-line no-undef
       // gl.uniformMatrix4fv(hprogram.uMMatrix, false, new Float32Array(model.flatten()));
       // }
-      drawGeometry();
+
+
+      drawGeometry(new Float32Array(modelTotal.flatten()),
+        VrLib.frameData.rightViewMatrix,
+        new Float32Array(im.flatten()),
+        VrLib.frameData.rightProjectionMatrix);
       VrLib.submitFrame(); // eslint-disable-line no-undef
     }
 
@@ -575,7 +602,7 @@
       trans2.translate(modelPos.f[0], modelPos.f[1], modelPos.f[2]);
       cameraMatrix = trans2.multiple(trans.multiple(rot));
       normalMat = trans2.multiple(trans.multiple(rot));
-      perspectiveMatrix.makePerspective(fov, canvas.width / canvas.height, viewdistance, 100.0);
+      perspectiveMatrix.makePerspective(fov, canvas.width / canvas.height, 0.001, 100.0);
       /* MouseLib.setCamera(cameraNormal, // eslint-disable-line no-undef
         cameraUp, cameraPos, modelPos);*/
     }
@@ -816,6 +843,70 @@
       // return true;
     };
 
+    PlotterLib.scale = function scale(axis){
+      console.log("scale "+axis);
+      modelScaleFactor = modelScaleFactor * 1.0 + 0.002 * (axis);
+    }
+
+
+    function touchDown(event) {
+      const x = (event.touches[0].clientX - canvas.offsetLeft) ;
+      const y = (event.touches[0].clientY - canvas.offsetTop);
+      PlotterLib.mouseDown({pageX:x,pageY:y, buttons:1})
+    }
+
+    function touchMove(event) {
+      const x = (event.touches[0].clientX - canvas.offsetLeft) ;
+      const y = (event.touches[0].clientY - canvas.offsetTop);
+      PlotterLib.mouseMove({pageX:x,pageY:y, buttons:1})
+    }
+
+    function touchUp(event) {
+      const x = (event.touches[0].clientX - canvas.offsetLeft) ;
+      const y = (event.touches[0].clientY - canvas.offsetTop);
+      PlotterLib.mouseUp({pageX:x,pageY:y, buttons:1})
+    }
+
+
+    PlotterLib.setStartPosition = function startMove(pos, ori){ // under work
+      translateStartX = modelPosition.f[0];
+      moveStartX = pos[0];
+      translateStartY = modelPosition.f[1];
+      moveStartY = pos[1];
+      translateStartZ = modelPosition.f[2];
+      moveStartZ = pos[2];
+
+      const ma = new Matrix4();
+      ma.rotationQMatrix(ori);
+      extraRotation = ma;
+
+    }
+
+    PlotterLib.setPosition = function move(pos,ori ){ // under work
+      modelPosition.f[0] = translateStartX + (pos[0]-moveStartX);
+      modelPosition.f[1] = translateStartY + (pos[1]-moveStartY);
+      modelPosition.f[2] = translateStartZ + (pos[2]-moveStartZ);
+
+      const ma = new Matrix4();
+      ma.rotationQMatrix(ori);
+      extraRotation = ma;
+
+    }
+
+    PlotterLib.setEndPosition = function endMove(pos, ori){ // under work
+      translateStartX = 0;
+      translateStartY = 0;
+      translateStartZ = 0;
+      moveStartX = 0;
+      moveStartY = 0;
+      moveStartZ = 0;
+      /*
+      const ma = new Matrix4();
+      ma.rotationQMatrix(ori);
+      extraRotation = ma;
+      */
+    }
+
     PlotterLib.mouseWheel = function mouseWheel(event) {
       // console.log('mouse wheel');
       const delta = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)));
@@ -829,7 +920,11 @@
       clearColor = [rgb.r / 255, rgb.g / 255, rgb.b / 255, alpha / 255];
     };
 
+    function makeVRAdjustments(){
+      legendOn = false;
+      //modelPosition.f[2] -= 2.0;
 
+    }
 
     PlotterLib.startdice = function startdice() {
       gravity = new Vec3(0, -9.81, 0);
@@ -910,7 +1005,7 @@
         if(e.key === 'Escape' || e.key === 'p'){
           console.log("hide ui????");
           document.getElementById('textlayer').hidden = !document.getElementById('textlayer').hidden;
-        }else if(e.key ==='r'){
+        }else if(e.key ==='t'){
           rotateOn=!rotateOn;
         }
       };
@@ -988,9 +1083,9 @@
         }
       }, false);
 
-      canvas.addEventListener('touchstart', PlotterLib.touchDown, false);
-      canvas.addEventListener('touchend', PlotterLib.touchUp, false);
-      canvas.addEventListener('touchmove', PlotterLib.touchMove, false);
+      canvas.addEventListener('touchstart', touchDown, false);
+      canvas.addEventListener('touchend', touchUp, false);
+      canvas.addEventListener('touchmove', touchMove, false);
       // numberx = document.getElementById('number'); // eslint-disable-line no-undef
       // planeConstraints = WallLib.makeWalls(); // eslint-disable-line no-undef
       // Initialize the GL context
@@ -1083,7 +1178,9 @@
         //dataSet = DataReaderLib.addRadioDataSet(File.createFromFileName("data/libre.txt"),gl);
 
         if (VrLib) {
-          VrLib.initVR(canvas, runner, drawVRScene, gl, makeCamera);// eslint-disable-line no-undef
+          VrLib.initVR(canvas, runner, drawVRScene, gl, makeCamera, makeVRAdjustments);// eslint-disable-line no-undef
+          vrOffsetMatrix = new Matrix4();
+          vrOffsetMatrix.translate(0,0,-2);
         }
         runner();
       }

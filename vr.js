@@ -15,6 +15,11 @@
     const vrcontrollerIds = [];
     const vrcontrollers = {};
 
+    let b0= false;
+    let b1= false;
+
+    let textnotset = true;
+
     // let dices = null;
 /*
     VrLib.setDices = function setDices(d) {
@@ -68,7 +73,7 @@
       const cont = controller;
       const pos = controller.position;
       const ori = controller.orientation;
-
+/*
       const dir = new Vec3(0, 0, -2.0);
       const ma = new Matrix4();
       ma.rotationQMatrix(ori);
@@ -79,6 +84,8 @@
       const p1 = new Vec3(ve[0], ve[1], ve[2]);
 
       const closest = null;
+      */
+
       /*
       let d = 0.4 * WallLib.getWallX(); // eslint-disable-line no-undef
 
@@ -113,6 +120,9 @@
     }
 
     function vrMove(controller) {
+      const pos = controller.position;
+      const ori = controller.orientation;
+      PlotterLib.setPosition(pos,ori);
       /*
       const cont = controller;
       const pos = controller.position;
@@ -155,6 +165,7 @@
 
     function vrUp(controller) {
       const cont = controller;
+      PlotterLib.setEndPosition();
       /*
       if (controller.selectedparticle !== null) {
         cont.selectedparticle = null;
@@ -164,7 +175,7 @@
     }
 
 
-    VrLib.initVR = function initVR(canvas, runner, drawVRScene, gl, makeCamera) {
+    VrLib.initVR = function initVR(canvas, runner, drawVRScene, gl, makeCamera, makeVRAdjustments) {
       const can = canvas;
       VrLib.drawVRScene = drawVRScene;
       if (navigator.getVRDisplays && navigator.getGamepads) { // eslint-disable-line no-undef
@@ -174,6 +185,7 @@
         // If a display is available, use it to present the scene
           if (displays.length > 0) {
             vrDisplay = displays[0];
+
             console.log('Display found'); // eslint-disable-line no-console
           // Starting the presentation when the button is clicked:
           // It can only be called in response to a user gesture
@@ -188,6 +200,8 @@
                   can.height = Math.max(leftEye.renderHeight, rightEye.renderHeight);
                 // stop the normal presentation, and start the vr presentation
                   window.cancelAnimationFrame(VrLib.normalSceneFrame);
+                  //vrDisplay.depthFar = -100000.0;
+                  makeVRAdjustments();
                   drawVRScene();
                   btn.textContent = 'Exit VR display';
                 });
@@ -202,6 +216,7 @@
                 // aspectRatio = canvas.width / canvas.height;
                 gl.viewport(0, 0, canvas.width, canvas.height);
                 makeCamera();
+
                 runner();
               }
             });
@@ -236,11 +251,40 @@
       vrSceneFrame = vrDisplay.requestAnimationFrame(VrLib.drawVRScene);
       // Populate frameData with the data of the next frame to display
       // if (VrLib.frameData) {
+
       vrDisplay.getFrameData(VrLib.frameData);
       // You can get the position, orientation, etc. of the display from the current frame's pose
       const gamepads = navigator.getGamepads(); // eslint-disable-line no-undef
       for (let i = 0; i < gamepads.length; i++) {
         const gp = gamepads[i];
+        /*
+        if(gp && (textnotset || gp.buttons[0].pressed || gp.buttons[1].pressed)){
+          const p = document.getElementById('fillertext');
+          if(gp.buttons[0].pressed) b0 = true;
+          if(gp.buttons[1].pressed) b1 = true;
+
+          p.innerHTML = "Found gamepad axes "+gp.axes.length+" buttons "+gp.buttons.length+
+          ((gp.pose)?"has pose":"no pose")+((gp.pose && gp.pose.orientation)?("has orientation "+gp.pose.orientation):" no orientation")+
+          " buttons pressed b0 "+b0+" b1 "+b1;
+          textnotset =false;
+        }
+        */
+        if(gp && gp.pose && gp.pose.orientation && !gp.pose.position){
+          vrcontrollers[gp.index].position =(gp.pose.position)?
+            [gp.pose.position[0], gp.pose.position[1], gp.pose.position[2]]
+            :[0,0,0];
+          vrcontrollers[gp.index].orientation = gp.pose.orientation;
+          if (vrcontrollers[gp.index].pressed === false && gp.buttons[1].pressed) {
+            vrDown(vrcontrollers[gp.index]);
+          } else if (vrcontrollers[gp.index].pressed === true && gp.buttons[1].pressed) {
+            vrMove(vrcontrollers[gp.index]);
+          } else if (vrcontrollers[gp.index].pressed === true && !gp.buttons[1].pressed) {
+            vrUp(vrcontrollers[gp.index]);
+          }
+          vrcontrollers[gp.index].pressed = gp.buttons[1].pressed;
+        }
+
+
         if (gp && gp.pose && gp.pose.position) {
           vrcontrollers[gp.index].position =
             [gp.pose.position[0], gp.pose.position[1], gp.pose.position[2]];
@@ -260,7 +304,13 @@
             vrUp(vrcontrollers[gp.index]);
           }
           vrcontrollers[gp.index].pressed = gp.buttons[1].pressed;
+        }
 
+        if(gp && gp.axes &&gp.axes[0]){
+          const a = gp.axes[0];
+          PlotterLib.scale(a);
+        }
+/*
           if (gp.buttons[2].pressed) {
             DiceLib.reroll(); // eslint-disable-line no-undef
           }
@@ -277,8 +327,9 @@
           if (gp.buttons[4].pressed && vrcontrollers[gp.index].dice2button === false) {
             DiceLib.createRandomColorDice(); // eslint-disable-line no-undef
           }
-          vrcontrollers[gp.index].dice2button = gp.buttons[4].pressed;
-        }
+          */
+          //vrcontrollers[gp.index].dice2button = gp.buttons[4].pressed;
+        //}
       }
       // }
      // return frameData;
