@@ -429,7 +429,7 @@
   </head>
   <body onload="PlotterLib.startdice(); " onresize="PlotterLib.resize();" id="bod" style="height: 100%; overflow:hidden;">
     <layer id="canvaslayer" style=" z-index:-1; top:0; left:0; position:absolute;">
-      <canvas tabIndex="0" id="glcanvas" width="600" height="600">
+      <canvas tabIndex="0" id="glcanvas" width="600" height="600" style="overscroll-behavior:none;">
         Your browser doesn't appear to support the
         <code>&lt;canvas&gt;</code> element.
       </canvas>
@@ -462,6 +462,7 @@
       <!--<br/>
       <p id="fillertext" style="color:white">Tex Filler</p>-->
     </layer>
+    <script type="text/javascript" src="connection.js"></script>
     <script type="text/javascript" src="vema/vema.js"></script>
     <script type="text/javascript" src="shader.js"></script>
     <script type="text/javascript" src="sphere.js"></script>

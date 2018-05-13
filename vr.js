@@ -73,6 +73,7 @@
       const cont = controller;
       const pos = controller.position;
       const ori = controller.orientation;
+      PlotterLib.setStartPosition(pos,ori);
 /*
       const dir = new Vec3(0, 0, -2.0);
       const ma = new Matrix4();
@@ -272,7 +273,7 @@
         if(gp && gp.pose && gp.pose.orientation && !gp.pose.position){
           vrcontrollers[gp.index].position =(gp.pose.position)?
             [gp.pose.position[0], gp.pose.position[1], gp.pose.position[2]]
-            :[0,0,0];
+            :null;
           vrcontrollers[gp.index].orientation = gp.pose.orientation;
           if (vrcontrollers[gp.index].pressed === false && gp.buttons[1].pressed) {
             vrDown(vrcontrollers[gp.index]);
@@ -306,9 +307,14 @@
           vrcontrollers[gp.index].pressed = gp.buttons[1].pressed;
         }
 
-        if(gp && gp.axes &&gp.axes[0]){
-          const a = gp.axes[0];
+        if(gp && gp.axes && gp.axes[1] && gp.buttons[0].pressed){
+          const a = gp.axes[1];
           PlotterLib.scale(a);
+        } else if (gp && gp.axes && gp.buttons[1].pressed) {
+          console.log("HERERERRERER");
+          PlotterLib.moveXY(gp.axes[0],gp.axes[1]);
+        } else if(gp && gp.axes) {
+          PlotterLib.move(gp.axes[0],gp.axes[1]);
         }
 /*
           if (gp.buttons[2].pressed) {

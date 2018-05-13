@@ -78,6 +78,7 @@
 
     const Vec3 = VemaLib.Vec3; // eslint-disable-line no-undef
     const Matrix4 = VemaLib.Matrix4; // eslint-disable-line no-undef
+    const Quaternion = VemaLib.Quaternion; // eslint-disable-line no-undef
 
     const SphereRenderer = SphereLib.SphereRenderer; // eslint-disable-line no-undef
 
@@ -115,6 +116,8 @@
     let modelScaleFactor = 1.0;
     let autoRotationY=0.0;
     let autoRotationSpeed =0.01;
+    let rotStart;
+    let centreQ;
 
 
     const mediaSource = new MediaSource();
@@ -791,27 +794,28 @@
             const addRotY = new Matrix4();
             addRotY.rotationXMatrix(((mouseButtonStartY - event.pageY) * 0.005));
             modelRot = rotationStart.multiple(addRotX.multiple(addRotY));
+            PlotterLib.setModelRotation(modelRot);
           } else if (event.buttons & 0x2 || event.buttons & 0x4) {
-            modelPosition.f[0] = translateStartX - 0.005 * (mouseButtonStartX - event.pageX);
+            PlotterLib.setModelPosition(translateStartX - 0.005 * (mouseButtonStartX - event.pageX), modelPosition.f[1], modelPosition.f[2]);
             if (!event.shiftKey) {
-              modelPosition.f[2] = translateStartZ - 0.005 * (mouseButtonStartY - event.pageY);
+              PlotterLib.setModelPosition(modelPosition.f[0], modelPosition.f[1], translateStartZ - 0.005 * (mouseButtonStartY - event.pageY));
             } else {
-              modelPosition.f[1] = translateStartY + 0.005 * (mouseButtonStartY - event.pageY);
+              PlotterLib.setModelPosition(modelPosition.f[0], translateStartY + 0.005 * (mouseButtonStartY - event.pageY), modelPosition.f[2]);
             }
           }
         } else if (mInteractionState === InteractionState.HorizontalRotate) {
           const addRotX = new Matrix4();
           addRotX.rotationYMatrix(((mouseButtonStartX - event.pageX) * -0.005));
           modelRot = rotationStart.multiple(addRotX);
+          PlotterLib.setModelRotation(modelRot);
         } else if (mInteractionState === InteractionState.HorizontalTranslate) {
-          modelPosition.f[0] = translateStartX - 0.005 * (mouseButtonStartX - event.pageX);
-          modelPosition.f[2] = translateStartZ - 0.005 * (mouseButtonStartY - event.pageY);
+          PlotterLib.setModelPosition(translateStartX - 0.005 * (mouseButtonStartX - event.pageX), modelPosition.f[1], translateStartZ - 0.005 * (mouseButtonStartY - event.pageY));
         } else if (mInteractionState === InteractionState.VerticalTranslate) {
-          modelPosition.f[0] = translateStartX - 0.005 * (mouseButtonStartX - event.pageX);
-          modelPosition.f[1] = translateStartY + 0.005 * (mouseButtonStartY - event.pageY);
+          PlotterLib.setModelPosition(translateStartX - 0.005 * (mouseButtonStartX - event.pageX), translateStartY + 0.005 * (mouseButtonStartY - event.pageY), modelPosition.f[2]);
         } else if (mInteractionState === InteractionState.Scale) {
-          modelPosition.f[0] = translateStartX - 0.005 * (mouseButtonStartX - event.pageX);
+          //PlotterLib.setModelPosition(translateStartX - 0.005 * (mouseButtonStartX - event.pageX);, modelPosition.f[1], modelPosition.f[2]);
           modelScaleFactor = scaleStartX * 1.0 + 0.002 * (mouseButtonStartY - event.pageY);
+          PlotterLib.setModelScale(modelScaleFactor);
         }
       }
       // event.preventDefault();
@@ -844,8 +848,21 @@
     };
 
     PlotterLib.scale = function scale(axis){
-      console.log("scale "+axis);
-      modelScaleFactor = modelScaleFactor * 1.0 + 0.002 * (axis);
+      if(Math.abs(axis)>0.01){
+        console.log("scale "+axis);
+        modelScaleFactor = modelScaleFactor * 1.0 + 0.002 * (axis);
+        PlotterLib.setModelScale(modelScaleFactor);
+      }
+    }
+
+    PlotterLib.move = function move(x,y){
+      if(Math.abs(x)> 0.01 ||Math.abs(y)>0.01)
+        PlotterLib.setModelPosition(modelPosition.f[0]+x*0.01, modelPosition.f[1], modelPosition.f[2]+y*0.01);
+    }
+
+    PlotterLib.moveXY = function moveXY(x,y){
+      if(Math.abs(x)> 0.01 ||Math.abs(y)>0.01)
+        PlotterLib.setModelPosition(modelPosition.f[0]+x*0.01, modelPosition.f[1]+y*0.01, modelPosition.f[2]);
     }
 
 
@@ -868,38 +885,53 @@
     }
 
 
-    PlotterLib.setStartPosition = function startMove(pos, ori){ // under work
-      translateStartX = modelPosition.f[0];
-      moveStartX = pos[0];
-      translateStartY = modelPosition.f[1];
-      moveStartY = pos[1];
-      translateStartZ = modelPosition.f[2];
-      moveStartZ = pos[2];
+    PlotterLib.setStartPosition = function startMove(pos, ori){
+      if(pos !==null){
+        translateStartX = modelPosition.f[0];
+        moveStartX = pos[0];
+        translateStartY = modelPosition.f[1];
+        moveStartY = pos[1];
+        translateStartZ = modelPosition.f[2];
+        moveStartZ = pos[2];
+      }
 
+      rotStart = modelRot;
+
+      centreQ = (new Quaternion(ori)).invert();
+      console.log("startPos "+ ori);
+      /*
       const ma = new Matrix4();
       ma.rotationQMatrix(ori);
       extraRotation = ma;
+      */
 
     }
 
-    PlotterLib.setPosition = function move(pos,ori ){ // under work
-      modelPosition.f[0] = translateStartX + (pos[0]-moveStartX);
-      modelPosition.f[1] = translateStartY + (pos[1]-moveStartY);
-      modelPosition.f[2] = translateStartZ + (pos[2]-moveStartZ);
-
+    PlotterLib.setPosition = function move(pos,ori ){
+      if(pos !== null){
+        PlotterLib.setModelPosition(translateStartX + (pos[0]-moveStartX),
+        translateStartY + (pos[1]-moveStartY),
+        translateStartZ + (pos[2]-moveStartZ));
+      }
+      const currentQ = new Quaternion(ori);
+      console.log("setPos "+ ori);
+      const turn = centreQ.multiple(currentQ);
       const ma = new Matrix4();
-      ma.rotationQMatrix(ori);
-      extraRotation = ma;
-
+      console.log("turn "+turn.q);
+      ma.rotationQMatrix(turn.q);
+      //extraRotation = extraRotation.multiple(ma);
+      modelRot = rotStart.multiple(ma);
+      PlotterLib.setModelRotation(modelRot);
     }
 
-    PlotterLib.setEndPosition = function endMove(pos, ori){ // under work
+    PlotterLib.setEndPosition = function endMove(pos, ori){
       translateStartX = 0;
       translateStartY = 0;
       translateStartZ = 0;
       moveStartX = 0;
       moveStartY = 0;
       moveStartZ = 0;
+
       /*
       const ma = new Matrix4();
       ma.rotationQMatrix(ori);
@@ -912,6 +944,7 @@
       const delta = Math.max(-1, Math.min(1, (event.wheelDelta || -event.detail)));
       console.log(`delta is ${delta}`);
       modelScaleFactor *= 1.0 + 0.02 * delta;
+      PlotterLib.setModelScale(modelScaleFactor);
     };
 
     PlotterLib.changeColor = function changeColor(color, alpha) {
@@ -924,6 +957,35 @@
       legendOn = false;
       //modelPosition.f[2] -= 2.0;
 
+    }
+
+    function receiveJSONObject(json){
+      if(json.modelPosition){
+        modelPosition.f[0] = json.modelPosition[0];
+        modelPosition.f[1] = json.modelPosition[1];
+        modelPosition.f[2] = json.modelPosition[2];
+      }
+      if(json.modelRotation){
+        modelRot.setMatrixData(json.modelRotation);
+      }
+      if(json.modelScale) {
+        modelScaleFactor = json.modelScale;
+      }
+    }
+
+    PlotterLib.setModelPosition = function setModelPosition(x,y,z) {
+      modelPosition.f[0] = x;
+      modelPosition.f[1] = y;
+      modelPosition.f[2] = z;
+      ConnectionLib.sendJson({modelPosition:[x,y,z]});
+    }
+
+    PlotterLib.setModelRotation = function setModelRotation(rotation) {
+      ConnectionLib.sendJson({modelRotation:rotation.flatten()});
+    }
+
+    PlotterLib.setModelScale = function setModelScale(scale) {
+      ConnectionLib.sendJson({modelScale:scale});
     }
 
     PlotterLib.startdice = function startdice() {
@@ -1181,6 +1243,9 @@
           VrLib.initVR(canvas, runner, drawVRScene, gl, makeCamera, makeVRAdjustments);// eslint-disable-line no-undef
           vrOffsetMatrix = new Matrix4();
           vrOffsetMatrix.translate(0,0,-2);
+        }
+        if(ConnectionLib){
+          ConnectionLib.makeConnection(receiveJSONObject);
         }
         runner();
       }
